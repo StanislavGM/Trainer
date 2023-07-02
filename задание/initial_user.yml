@@ -1,0 +1,21 @@
+# Ланная задача осуществит обновление (если доступно) менеджера пакетов ubuntu, на всех указанных серверах/хостах
+- hosts: all
+  become: yes
+  tasks:
+    - name: apt update
+      apt:
+        update_cache: yes
+# Данная команда создаст пользователя с именем superuser, параметр createhome создаст каталог в корневом каталоге /home с именем superuser, а также установит возможность работы с bash.
+    - name: create the 'superuser' user
+      user: name=superuser append=yes state=present createhome=yes shell=/bin/bash
+# Данная задача добавит строку в файл /etc/sudoers, для привелегии пользователю superuser не использовать предлог sudo перед командами нуждающимися в правах администратора.
+    - name: allow 'superuser' to have passwordless sudo
+      lineinfile:
+        dest: /etc/sudoers
+        line: 'superuser ALL=(ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+#данная задача произведет назначение нашего публичного ключа для создаваемого пользователя "superuser" в его директории ~/.ssh/файл будет называться authorized_keys
+    - name: set up authorized keys for the superuser user
+      authorized_key: user=superuser key="{{item}}"
+      with_file:
+        - ~/.ssh/id_rsa.pub

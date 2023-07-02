@@ -1,0 +1,26 @@
+---
+  - name: start-ufw # задача на запуск фаервола
+    ufw:
+      state: enabled
+  - name: opening 22 port # задача один, открываем порт 22
+    ufw:
+      rule: allow
+      proto: any
+      port: "{{ssh}}"
+      direction: in
+      comment: rule for allowing traffic through SSH connection
+  - name: opening 80 port # задача номер два, открываем 80 порт
+    ufw:
+      rule: allow
+      proto: any
+      port: "{{http}}"
+      direction: in
+      comment: rule for incoming traffic through HTTP protocol
+  - name: opening 443 port # задача 3, открываем трафик по 443 порту.
+    ufw: # имя модуля ansible
+      rule: allow # цель правила
+      proto: any # указываем каким протоколам разрешено работать по данному открываемому порту
+      port: "{{https}}" # указываем порт через переменную
+      direction: in # указываем направление incoming.
+      comment: rule for incoming traffic through HTTPS protocol
+    notify: reload-ufw # служит активатором handler файла с задачей.

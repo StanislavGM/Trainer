@@ -1,0 +1,14 @@
+---
+# tasks file
+# Данная задача в роли, выполнит компирования файла с правами для владельца чтение/запись/воспроизведение и правами для пользователей состоящих в группе присовенной файлу (права чтение и воспроизведение) из каталога templates, на удаленный компьютер/сервер.
+- name: Copy script in place.
+  template:
+    src: script.j2
+    dest: /usr/local/sbin/transfer_backup_{{profile_name}}.sh
+    mode: 00750
+
+- name: set cron job tranfer file # данная задача будет осуществлять запуск скрипта каждые 4 часа 35 минут.
+  cron: name="copy files {{profile_name}}" #Итоговое имя Copy files backups
+    job="transfer_backup_{{profile_name}}.sh"
+    minute="35"
+    hour="4"

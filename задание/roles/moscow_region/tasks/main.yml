@@ -1,0 +1,6 @@
+---
+Данная роль Ansible выполнит присвоение временной зоны Европейская часть/ Москва +3 GMT
+# tasks file for moscow_region
+- name: set timezone to Europe/Moscow
+  timezone:
+    name: Europe/Moscow

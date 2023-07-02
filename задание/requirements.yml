@@ -1,0 +1,10 @@
+---
+collections: # загрузка коллекций с сервера ansible galaxy, устанавливается zabbix агент.
+  - name: community.zabbix
+    version: 1.5.1
+  - name: ansible.posix # установка коллекции интерфейса posix.
+    version: 1.3.0
+
+roles: # загрузка prometheus node exporter роли из ansible galaxy сервера. Роль раскрывает метрики.
+  - name: cloudalchemy.node_exporter
+

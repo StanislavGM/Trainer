@@ -1,0 +1,87 @@
+stages:  # данный параметр отражает какие этапы будут проводится в рамках этого pipelin-а
+ #- build - не хватает данного параметра
+  - init
+  - deploy 
+
+variables: # обозначение переменных
+  DOCKER_ANSIBLE_IMAGE: "${CI_REGISTRY}/${CI_PROJECT_NAMESPACE}/${CI_PROJECT_NAME}/ansible:latest"
+  PORT: 22
+
+build_ansible: # обозначение этапа
+  image: docker:stable # имя образа
+  stage: build # название этапа
+  tags: # параметр и его значение Tag
+    - linux
+  only: # данный job build_ansible выполнится только при совпадении двух условий, изменения касаются ветки - master, изменения находятся в дочерних каталогах после build/**/*.
+    refs: # параметр указывает когда этап build_ansible, будет запущен в работу. Какие изменение поспособствуют этому. В данном случае берутся изменения только при master push (в мастер ветке).
+      - master
+    changes: # параметр осущеставляет проверку изменений во всех подкаталогах build/
+      - build/**/*
+  before_script: # Данная опция запустится перед основными командами, предоставят данные для входа в Docker hub, переменную CI_REGISTRY_PASSWORD нужно пернести в конец предложения.
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username $CI_REGISTRY_USER --password-stdin
+  script:  # обозначение комманд поочередно, изменение каталогов build->ansible, далее в каталоге ansible будет собран образ docker image, с тегом описанном в переменной в начале этого файла, после данный образ будет загружен в репозиторий.
+    - cd build
+    - cd ansible
+    - docker build -t ${DOCKER_ANSIBLE_IMAGE} .
+    - docker push ${DOCKER_ANSIBLE_IMAGE}
+
+add_user: # следующий этап добавление пользователя на удаленную систему.
+  stage: init
+  tags:
+    - linux
+  only: # параметр указывает когда этап add_user, будет запущен в работу. Какие изменение поспособствуют этому. Должно быть выполнено два условия, объявлена переменная $USER, и изменения в ветке - master.
+    refs:
+- master
+    # - master - параметр должен находится на этой позиции
+    variables: # обозначение переменной с именем для создаваемого нами пользователя.
+      - $USER
+  script:
+    - sshpass -p $PASSWORD ssh-copy-id $USER@$IP -p $PORT # данная команда передаст пароль в переменной PASSWORD на удаленный хост, а также скопирует и переименует ключ id_rsa.pub в authorized_keys. подключение через пользователя в переменной USER и хост в переменной IP + переменная PORT
+    - ansible-playbook initial_user.yml -i $IP:$PORT, --user=$USER --extra-vars "ansible_sudo_pass=$PASSWORD"  # запуск playbook-а с использованием файла initial_user.yml с использованием значений в переменных $IP и $PORT аргументом user будет значение переменной $USER также в команду запуска включается доп. переменная ansible ansible_sudo_pass будет значением будет переменная $PASSWORD.
+
+.deploy_abstr:  # следующий этап разворачивание ранее собранного образа из docker hub-a
+  image: ${DOCKER_ANSIBLE_IMAGE} # имя соданного образа из первого job.
+  stage: deploy # имя этапа - развёртка
+  when: manual # параметр типа запуска , работа будет запускатся вручню
+  only: 
+    refs:
+      - master
+  cache: # данная функция добавит в параметр cache файлы и директории указанные в paths.
+    key: ansible-roles-build # наименование предоставляемое каждому cache, для отделения их друг от друга. Если не указывать то cache по умолчанию будет значится как default.
+    paths:
+      - .ansible/roles
+  variables:
+    ANSIBLE_ROLES_PATH: .ansible/roles
+  tags:
+    - linux
+  script:
+    - ansible-galaxy install -r requirements.yml # данная команда установит версии приложений из коллекций Ansible Galaxy, определенных в файле requirements.yml 
+    - ansible-playbook $FILE_ANS -i hosts --extra-vars "privatekey_passphrase=${PASSPHRASE}" # Запуск playbook-a переменная $FILE_ANS будет использована из последующей работы extend_deploy, master.yml.
+
+general_deploy_job:
+  extends: .deploy_abstr # данная опция предназначена для переиспользования отдельных частей конфигураций в нашем случае мы переиспользуем конфигурацию job с именем deploy_abstr и добавлением в конфигурацию переменную.
+  variables:
+    FILE_ANS: master.yml
+
+# Данная функция осуществит слияние работы general_deploy_job 
+# и значений из шаблона .deploy_abstr. Таким образом у нас получится финальный вид
+# работы general_deploy_job
+#.deploy_abstr: 
+#  image: ${DOCKER_ANSIBLE_IMAGE}
+#  stage: deploy
+#  when: manual
+#  only:
+#    refs:
+#      - master
+#  cache:
+#    key: ansible-roles-build
+#    paths:
+#      - .ansible/roles
+#  variables:
+#    ANSIBLE_ROLES_PATH: .ansible/roles
+#    FILE_ANS: master.yml
+#  tags:
+#    - linux
+#  script:
+#    - ansible-galaxy install -r requirements.yml
+#    - ansible-playbook $FILE_ANS -i hosts --extra-vars "privatekey_passphrase=${PASSPHRASE}"

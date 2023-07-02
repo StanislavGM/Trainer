@@ -1,9 +1,0 @@
-[allservers]
-test1		    ansible_host=10.2.0.18          ansible_user=superuser need_tls=true domain_name=test.noname.ru
-stats 			ansible_host=10.2.0.19 		    ansible_user=superuser need_tls=true domain_name=vm-01.noname.local
-
-[cloud_client]
-test1
-
-# для выполнения нашей задачи мы должны вписать в группу [allservers] напротив test1 актуальный IP адрес ansible_host
-# а также актуальное имя пользователя под которым мы подключаемся. Остальные параметры задействованы не будут. 

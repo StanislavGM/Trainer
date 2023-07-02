@@ -42,11 +42,11 @@ output "asg_group_size" {
 output "public_dns_red-hat" {
   value = aws_instance.red_hat_server.public_dns
 }
-
+/*
 output "subnet_addrs" {
   value = module.subnet_addrs.network_cidr_blocks
 }
-
+*/
 output "ecr_repository_url" {
   value = aws_ecr_repository.ecr_for_images.repository_url
 }

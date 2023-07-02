@@ -217,12 +217,7 @@ resource "aws_instance" "ubuntu_server" {
   }
   #leave the first part of block unchanged and create our "local-exec" provisioner
   provisioner "local-exec" {
-    command     = <<EOT
-      Set-ExecutionPolicy RemoteSigned -force
-      $Env:PATH += ";C:\Scripts"
-      Key_rule.ps1
-    EOT
-    interpreter = ["PowerShell", "-Command"]
+    command     = "chmod 600 ${local_file.private_key_pem.filename}"
   }
   provisioner "file" {
     source = "prometheus.service"
@@ -550,7 +545,8 @@ module "subnet_addrs" {
   indentity       = "Ubuntu"
 }
 */
-/*module "server_subnet_1" {
+
+/* module "server_subnet_1" {
   source          = "./modules/web-server"
   ami             = data.aws_ami.ubuntu_20_04.id
   subnet_id       = aws_subnet.public_subnets["public_subnet_1"].id
@@ -561,6 +557,7 @@ module "subnet_addrs" {
 
 }
 */
+/*
 module "autoscaling" {
   source = "github.com/terraform-aws-modules/terraform-aws-autoscaling"
   #Autoscaling group
@@ -579,14 +576,15 @@ module "autoscaling" {
     Name = "Web EC2 Server 2"
   }
 }
-
+/*
+/*
 module "key-pair" {
   source  = "mitchellh/dynamic-keys/aws"
   version = "2.0.0"
   path    = "${path.root}/keys"
   name    = "MyAWSKey_2"
 }
-
+*/
 resource "random_pet" "server" {
   length = 2
 }

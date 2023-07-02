@@ -38,7 +38,7 @@ output "asg_group_size" {
   description = "The maximum size of the autoscaling group"
   value       = module.autoscaling.autoscaling_group_max_size
 }
-
+*/
 output "public_dns_red-hat" {
   value = aws_instance.red_hat_server.public_dns
 }

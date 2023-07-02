@@ -30,4 +30,4 @@ scrape_configs:
 
   - job_name: application_server"
     static_configs:
-      - targets: ['54.170.183.13673:9100']
+      - targets: ['63.33.206.210:9100']

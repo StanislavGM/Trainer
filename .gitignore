@@ -17,8 +17,8 @@ override.tf.json
 .gitattributes
 
 
-**/.Github_task/*
-**/.задание/*
+**/Github_task/*
+**/задание/*
 **/.vs/*
 **/.terraform/*
 **/extending-terraform

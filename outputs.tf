@@ -34,6 +34,7 @@ output "size_of_module_server_web" {
   value = module.server.size
 }
 */
+/*
 output "asg_group_size" {
   description = "The maximum size of the autoscaling group"
   value       = module.autoscaling.autoscaling_group_max_size

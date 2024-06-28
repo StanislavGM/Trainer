@@ -252,17 +252,12 @@ resource "aws_instance" "ubuntu_server" {
   }
   #leave the first part of block unchanged and create our "local-exec" provisioner
   provisioner "local-exec" {
-    command     = <<EOT
-      Set-ExecutionPolicy RemoteSigned -force
-      $Env:PATH += ";C:\Scripts"
-      Key_rule.ps1
-    EOT
-    interpreter = ["PowerShell", "-Command"]
+    command     = "chmod 600 ${local_file.private_key_pem.filename}"
   }
-  provisioner "file" {
-    source      = "Prometheus_files"
-    destination = "/home/ubuntu/Prometheus_files"
-  }
+#  provisioner "file" {
+#    source      = "Prometheus_files"
+#    destination = "/home/ubuntu/Prometheus_files"
+#  }
   provisioner "remote-exec" {
     inline = [
       "sudo rm -rf /tmp",
@@ -271,62 +266,62 @@ resource "aws_instance" "ubuntu_server" {
       "sudo groupadd -r prometheus",
       "sudo useradd -s /sbin/nologin -r -g prometheus prometheus",
       "sudo apt-get install -y adduser libfontconfig1 musl",
-      "sudo mkdir /var/lib/alertmanager/",
-      "sudo mkdir /var/lib/prometheus",
-      "sudo mkdir -p /etc/alertmanager/",
-      "sudo mkdir -p /etc/prometheus/rules",
-      "sudo mkdir -p /etc/prometheus/node_keys",
-      "sudo mkdir -p /etc/prometheus/rules.s",
-      "sudo mkdir -p /etc/prometheus/files_sd",
-      "sudo mv /home/ubuntu/Prometheus_files/alertmanager.yml /etc/alertmanager/",
-      "sudo mv /home/ubuntu/Prometheus_files/alert_web.yml /etc/alertmanager/",
-      "sudo mv /home/ubuntu/Prometheus_files/prometheus.yml /etc/prometheus/",
-      "sudo mv /home/ubuntu/Prometheus_files/web.yml /etc/prometheus/",
-      "sudo mv /home/ubuntu/Prometheus_files/pushgateway.yml /etc/prometheus/",
-      "sudo mv /home/ubuntu/Prometheus_files/file_sd.yml /etc/prometheus/files_sd/",
-      "sudo mv /home/ubuntu/Prometheus_files/alert_rule.yml /etc/prometheus/rules",
-      "sudo mv /home/ubuntu/Prometheus_files/recording_rule.yml /etc/prometheus/rules",
-      "sudo mv /home/ubuntu/Prometheus_files/prom.crt /etc/prometheus/node_keys",
-      "sudo chown -R prometheus:prometheus /etc/alertmanager",
-      "sudo chown -R prometheus:prometheus /etc/alertmanager/*",
-      "sudo chown -R prometheus:prometheus /etc/prometheus",
-      "sudo chown -R prometheus:prometheus /etc/prometheus/*",
-      "sudo chmod -R 775 /etc/prometheus",
-      "sudo chmod -R 775 /etc/prometheus/*",
-      "sudo chmod -R 775 /etc/alertmanager",
-      "sudo chmod -R 775 /etc/alertmanager/*",
-      "sudo chown -R prometheus:prometheus /var/lib/prometheus",
-      "sudo wget https://github.com/prometheus/prometheus/releases/download/v2.45.0-rc.1/prometheus-2.45.0-rc.1.linux-amd64.tar.gz",
-      "sudo tar -xvzf prometheus-2.45.0-rc.1.linux-amd64.tar.gz && mv prometheus-2.45.0-rc.1.linux-amd64 prometheus-2.45",
-      "sudo wget https://github.com/prometheus/alertmanager/releases/download/v0.25.0/alertmanager-0.25.0.linux-amd64.tar.gz",
-      "sudo tar -xvzf alertmanager-0.25.0.linux-amd64.tar.gz",
-      "sudo wget wget https://github.com/prometheus/pushgateway/releases/download/v1.6.0/pushgateway-1.6.0.linux-amd64.tar.gz",
-      "sudo tar -xvzf pushgateway-1.6.0.linux-amd64.tar.gz",
+#      "sudo mkdir /var/lib/alertmanager/",
+#      "sudo mkdir /var/lib/prometheus",
+#      "sudo mkdir -p /etc/alertmanager/",
+#      "sudo mkdir -p /etc/prometheus/rules",
+#      "sudo mkdir -p /etc/prometheus/node_keys",
+#      "sudo mkdir -p /etc/prometheus/rules.s",
+#      "sudo mkdir -p /etc/prometheus/files_sd",
+#      "sudo mv /home/ubuntu/Prometheus_files/alertmanager.yml /etc/alertmanager/",
+#      "sudo mv /home/ubuntu/Prometheus_files/alert_web.yml /etc/alertmanager/",
+#      "sudo mv /home/ubuntu/Prometheus_files/prometheus.yml /etc/prometheus/",
+#      "sudo mv /home/ubuntu/Prometheus_files/web.yml /etc/prometheus/",
+#      "sudo mv /home/ubuntu/Prometheus_files/pushgateway.yml /etc/prometheus/",
+#      "sudo mv /home/ubuntu/Prometheus_files/file_sd.yml /etc/prometheus/files_sd/",
+#      "sudo mv /home/ubuntu/Prometheus_files/alert_rule.yml /etc/prometheus/rules",
+#      "sudo mv /home/ubuntu/Prometheus_files/recording_rule.yml /etc/prometheus/rules",
+#      "sudo mv /home/ubuntu/Prometheus_files/prom.crt /etc/prometheus/node_keys",
+#      "sudo chown -R prometheus:prometheus /etc/alertmanager",
+#      "sudo chown -R prometheus:prometheus /etc/alertmanager/*",
+#      "sudo chown -R prometheus:prometheus /etc/prometheus",
+#      "sudo chown -R prometheus:prometheus /etc/prometheus/*",
+#      "sudo chmod -R 775 /etc/prometheus",
+#      "sudo chmod -R 775 /etc/prometheus/*",
+#      "sudo chmod -R 775 /etc/alertmanager",
+#      "sudo chmod -R 775 /etc/alertmanager/*",
+#      "sudo chown -R prometheus:prometheus /var/lib/prometheus",
+#      "sudo wget https://github.com/prometheus/prometheus/releases/download/v2.45.0-rc.1/prometheus-2.45.0-rc.1.linux-amd64.tar.gz",
+#      "sudo tar -xvzf prometheus-2.45.0-rc.1.linux-amd64.tar.gz && mv prometheus-2.45.0-rc.1.linux-amd64 prometheus-2.45",
+#      "sudo wget https://github.com/prometheus/alertmanager/releases/download/v0.25.0/alertmanager-0.25.0.linux-amd64.tar.gz",
+#      "sudo tar -xvzf alertmanager-0.25.0.linux-amd64.tar.gz",
+#      "sudo wget wget https://github.com/prometheus/pushgateway/releases/download/v1.6.0/pushgateway-1.6.0.linux-amd64.tar.gz",
+#      "sudo tar -xvzf pushgateway-1.6.0.linux-amd64.tar.gz",
       #"sudo wget https://dl.grafana.com/enterprise/release/grafana-enterprise_10.1.1_amd64.deb",
       #"sudo dpkg -i grafana-enterprise_10.1.1_amd64.deb",
-      "cd ~/alertmanager-0.25.0.linux-amd64",
-      "sudo mv alertmanager amtool data /var/lib/alertmanager/",
-      "sudo chown -R prometheus:prometheus /var/lib/alertmanager",
-      "cd ~/prometheus-2.45",
-      "sudo mv prometheus promtool /usr/local/bin",
-      "cd ~/pushgateway-1.6.0.linux-amd64",
-      "sudo mv pushgateway /usr/local/bin/",
-      "sudo chown -R prometheus:prometheus /usr/local/bin",
-      "sudo chown -R prometheus:prometheus /usr/local/bin/*",
-      "sudo mv /home/ubuntu/Prometheus_files/prometheus.service /etc/systemd/system/",
-      "sudo mv /home/ubuntu/Prometheus_files/alertmanager.service /etc/systemd/system/",
-      "sudo mv /home/ubuntu/Prometheus_files/pushgateway.service /etc/systemd/system/",
-      "sudo systemctl daemon-reload",
-      "sudo systemctl enable prometheus",
-      "sudo systemctl start prometheus",
-      "sudo systemctl enable alertmanager",
-      "sudo systemctl start alertmanager",
-      "sudo systemctl enable pushgateway",
-      "sudo systemctl start pushgateway",
+#      "cd ~/alertmanager-0.25.0.linux-amd64",
+#      "sudo mv alertmanager amtool data /var/lib/alertmanager/",
+#      "sudo chown -R prometheus:prometheus /var/lib/alertmanager",
+#      "cd ~/prometheus-2.45",
+#      "sudo mv prometheus promtool /usr/local/bin",
+#      "cd ~/pushgateway-1.6.0.linux-amd64",
+#      "sudo mv pushgateway /usr/local/bin/",
+#      "sudo chown -R prometheus:prometheus /usr/local/bin",
+#      "sudo chown -R prometheus:prometheus /usr/local/bin/*",
+#      "sudo mv /home/ubuntu/Prometheus_files/prometheus.service /etc/systemd/system/",
+#      "sudo mv /home/ubuntu/Prometheus_files/alertmanager.service /etc/systemd/system/",
+#      "sudo mv /home/ubuntu/Prometheus_files/pushgateway.service /etc/systemd/system/",
+#      "sudo systemctl daemon-reload",
+#      "sudo systemctl enable prometheus",
+#      "sudo systemctl start prometheus",
+#      "sudo systemctl enable alertmanager",
+#      "sudo systemctl start alertmanager",
+#      "sudo systemctl enable pushgateway",
+#      "sudo systemctl start pushgateway",
       #"sudo systemctl enable grafana-server",
       #"sudo systemctl start grafana-server",
-      "cd $HOME",
-      "sudo rm -rf prometheus-2.45.0-rc.1.linux-386.tar alertmanager-0.25.0.linux-amd64 alertmanager-0.25.0.linux-amd64.tar.gz prometheus-2.45.0-rc.1.linux-amd64.tar prometheus-2.45 prometheus-2.45.0-rc.1.linux-amd64.tar.gz pushgateway-1.6.0.linux-amd64.tar.gz pushgateway-1.6.0.linux-amd64 grafana-enterprise_10.0.2_amd64.deb",
+#      "cd $HOME",
+#      "sudo rm -rf prometheus-2.45.0-rc.1.linux-386.tar alertmanager-0.25.0.linux-amd64 alertmanager-0.25.0.linux-amd64.tar.gz prometheus-2.45.0-rc.1.linux-amd64.tar prometheus-2.45 prometheus-2.45.0-rc.1.linux-amd64.tar.gz pushgateway-1.6.0.linux-amd64.tar.gz pushgateway-1.6.0.linux-amd64 grafana-enterprise_10.0.2_amd64.deb",
       #"sudo apt install apache2-utils -y"
     ]
   }
@@ -344,19 +339,21 @@ resource "aws_instance" "red_hat_server" {
     private_key = tls_private_key.generated.private_key_pem
     host        = self.public_ip
   }
+/*
   provisioner "file" {
     source      = "Node"
     destination = "/home/ec2-user/Node"
   }
-  /*rovisioner "file" {
+  provisioner "file" {
     source = "Gitlab.cicd"
     destination = "/home/ec2-user/Gitlab.cicd"
   }
-  */
+  
   provisioner "file" {
     source      = "pgsql"
     destination = "/home/ec2-user/pgsql"
   }
+*/
   provisioner "remote-exec" {
     inline = [
       "sudo sed --in-place '/^root/a postgres        ALL=(ALL)       NOPASSWD:       ALL' /etc/sudoers",
@@ -464,7 +461,6 @@ resource "aws_instance" "red_hat_server" {
     Name = "West Server"
   }
 }
-
 /*resource "aws_instance" "Win_Server_Os" {
   ami                         = data.aws_ami.Win_Server_Os.id
   instance_type               = "t2.small"

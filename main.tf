@@ -454,7 +454,8 @@ resource "aws_instance" "red_hat_server" {
       "sudo mv /home/ec2-user/pgsql/postgresql.conf /var/lib/pgsql/16/data/",
       "sudo chown -R root:root /var/lib/pgsql/16/data/postgresql.conf",
       "sudo systemctl enable postgresql-16",
-*/      "sudo systemctl start postgresql-16",
+      "sudo systemctl start postgresql-16",
+*/
     ]
   }
   tags = {  

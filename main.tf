@@ -263,9 +263,9 @@ resource "aws_instance" "ubuntu_server" {
       "sudo rm -rf /tmp",
       "sudo git clone https://github.com/hashicorp/demo-terraform-101 /tmp",
       "sudo sh /tmp/assets/setup-web.sh",
-      "sudo groupadd -r prometheus",
-      "sudo useradd -s /sbin/nologin -r -g prometheus prometheus",
-      "sudo apt-get install -y adduser libfontconfig1 musl",
+#      "sudo groupadd -r prometheus",
+#      "sudo useradd -s /sbin/nologin -r -g prometheus prometheus",
+#      "sudo apt-get install -y adduser libfontconfig1 musl",
 #      "sudo mkdir /var/lib/alertmanager/",
 #      "sudo mkdir /var/lib/prometheus",
 #      "sudo mkdir -p /etc/alertmanager/",
@@ -445,7 +445,7 @@ resource "aws_instance" "red_hat_server" {
       #      "sudo yum install npm -y",
       #      "sudo npm install",
       #      "node index.js"
-      "sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm",
+/*      "sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm",
       "sudo dnf -qy module disable postgresql",
       "sudo dnf install -y postgresql16-server",
       "sudo /usr/pgsql-16/bin/postgresql-16-setup initdb",
@@ -454,7 +454,7 @@ resource "aws_instance" "red_hat_server" {
       "sudo mv /home/ec2-user/pgsql/postgresql.conf /var/lib/pgsql/16/data/",
       "sudo chown -R root:root /var/lib/pgsql/16/data/postgresql.conf",
       "sudo systemctl enable postgresql-16",
-      "sudo systemctl start postgresql-16",
+*/      "sudo systemctl start postgresql-16",
     ]
   }
   tags = {  

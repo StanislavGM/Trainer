@@ -29,6 +29,16 @@ data "aws_ami" "red_hat" {
   owners = ["309956199498"]
 }
 
+/*data "aws_ami" "Win_Server_Os" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["Windows_Server-2016-English-Full-Base-2023.07.12"]
+  }
+  owners = ["801119661308"]
+}
+*/
 locals {
   teams       = "api_mgmt_dev"
   application = "corp_api"
@@ -155,7 +165,7 @@ resource "aws_internet_gateway" "internet_gateway" {
 
 #Create EIP for NAT Gateway
 resource "aws_eip" "nat_gateway_eip" {
-  vpc      = true
+#  vpc        = true
   depends_on = [aws_internet_gateway.internet_gateway]
   tags = {
     Name = "demo_igw_eip"
@@ -191,14 +201,39 @@ resource "aws_s3_bucket_ownership_controls" "new_rules" {
 
 resource "aws_s3_bucket_acl" "my-new-s3-bucket_acl" {
   depends_on = [aws_s3_bucket_ownership_controls.new_rules]
-  
+
   bucket = aws_s3_bucket.my-new-s3-bucket.id
   acl    = "private"
+}
+resource "aws_iam_role" "role_ubuntu_server" {
+  name = "ubuntu_server"
+
+  assume_role_policy = jsonencode({
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ec2.amazonaws.com"
+      }
+    }]
+    Version = "2012-10-17"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ubuntu_server-AmazonEC2ReadOnlyAccess" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess"
+  role       = aws_iam_role.role_ubuntu_server.name
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2_profile"
+  role = aws_iam_role.role_ubuntu_server.name
 }
 
 resource "aws_instance" "ubuntu_server" {
   ami                         = data.aws_ami.ubuntu_20_04.id
   instance_type               = "t2.micro"
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
   subnet_id                   = aws_subnet.public_subnets["public_subnet_1"].id
   vpc_security_group_ids      = [data.aws_security_group.test.id, aws_security_group.ingress-ssh.id, aws_security_group.vpc-web.id]
   associate_public_ip_address = true
@@ -217,15 +252,16 @@ resource "aws_instance" "ubuntu_server" {
   }
   #leave the first part of block unchanged and create our "local-exec" provisioner
   provisioner "local-exec" {
-    command     = "chmod 600 ${local_file.private_key_pem.filename}"
+    command     = <<EOT
+      Set-ExecutionPolicy RemoteSigned -force
+      $Env:PATH += ";C:\Scripts"
+      Key_rule.ps1
+    EOT
+    interpreter = ["PowerShell", "-Command"]
   }
   provisioner "file" {
-    source = "prometheus.service"
-    destination = "/home/ubuntu/prometheus.service"
-  }
-  provisioner "file" {
-    source = "prometheus.yml"
-    destination = "/home/ubuntu/prometheus.yml"
+    source      = "Prometheus_files"
+    destination = "/home/ubuntu/Prometheus_files"
   }
   provisioner "remote-exec" {
     inline = [
@@ -234,28 +270,64 @@ resource "aws_instance" "ubuntu_server" {
       "sudo sh /tmp/assets/setup-web.sh",
       "sudo groupadd -r prometheus",
       "sudo useradd -s /sbin/nologin -r -g prometheus prometheus",
+      "sudo apt-get install -y adduser libfontconfig1 musl",
+      "sudo mkdir /var/lib/alertmanager/",
       "sudo mkdir /var/lib/prometheus",
+      "sudo mkdir -p /etc/alertmanager/",
       "sudo mkdir -p /etc/prometheus/rules",
+      "sudo mkdir -p /etc/prometheus/node_keys",
       "sudo mkdir -p /etc/prometheus/rules.s",
       "sudo mkdir -p /etc/prometheus/files_sd",
-      "sudo mv /home/ubuntu/prometheus.yml /etc/prometheus/",
+      "sudo mv /home/ubuntu/Prometheus_files/alertmanager.yml /etc/alertmanager/",
+      "sudo mv /home/ubuntu/Prometheus_files/alert_web.yml /etc/alertmanager/",
+      "sudo mv /home/ubuntu/Prometheus_files/prometheus.yml /etc/prometheus/",
+      "sudo mv /home/ubuntu/Prometheus_files/web.yml /etc/prometheus/",
+      "sudo mv /home/ubuntu/Prometheus_files/pushgateway.yml /etc/prometheus/",
+      "sudo mv /home/ubuntu/Prometheus_files/file_sd.yml /etc/prometheus/files_sd/",
+      "sudo mv /home/ubuntu/Prometheus_files/alert_rule.yml /etc/prometheus/rules",
+      "sudo mv /home/ubuntu/Prometheus_files/recording_rule.yml /etc/prometheus/rules",
+      "sudo mv /home/ubuntu/Prometheus_files/prom.crt /etc/prometheus/node_keys",
+      "sudo chown -R prometheus:prometheus /etc/alertmanager",
+      "sudo chown -R prometheus:prometheus /etc/alertmanager/*",
       "sudo chown -R prometheus:prometheus /etc/prometheus",
       "sudo chown -R prometheus:prometheus /etc/prometheus/*",
-      "sudo chown -R prometheus:prometheus /var/lib/prometheus",
       "sudo chmod -R 775 /etc/prometheus",
       "sudo chmod -R 775 /etc/prometheus/*",
+      "sudo chmod -R 775 /etc/alertmanager",
+      "sudo chmod -R 775 /etc/alertmanager/*",
+      "sudo chown -R prometheus:prometheus /var/lib/prometheus",
       "sudo wget https://github.com/prometheus/prometheus/releases/download/v2.45.0-rc.1/prometheus-2.45.0-rc.1.linux-amd64.tar.gz",
-      "sudo gunzip prometheus-2.45.0-rc.1.linux-amd64.tar.gz",
-      "sudo tar -xvf prometheus-2.45.0-rc.1.linux-amd64.tar && mv prometheus-2.45.0-rc.1.linux-amd64 prometheus-2.45", 
-      "rm -rf prometheus-2.45.0-rc.1.linux-386.tar",
+      "sudo tar -xvzf prometheus-2.45.0-rc.1.linux-amd64.tar.gz && mv prometheus-2.45.0-rc.1.linux-amd64 prometheus-2.45",
+      "sudo wget https://github.com/prometheus/alertmanager/releases/download/v0.25.0/alertmanager-0.25.0.linux-amd64.tar.gz",
+      "sudo tar -xvzf alertmanager-0.25.0.linux-amd64.tar.gz",
+      "sudo wget wget https://github.com/prometheus/pushgateway/releases/download/v1.6.0/pushgateway-1.6.0.linux-amd64.tar.gz",
+      "sudo tar -xvzf pushgateway-1.6.0.linux-amd64.tar.gz",
+      #"sudo wget https://dl.grafana.com/enterprise/release/grafana-enterprise_10.1.1_amd64.deb",
+      #"sudo dpkg -i grafana-enterprise_10.1.1_amd64.deb",
+      "cd ~/alertmanager-0.25.0.linux-amd64",
+      "sudo mv alertmanager amtool data /var/lib/alertmanager/",
+      "sudo chown -R prometheus:prometheus /var/lib/alertmanager",
       "cd ~/prometheus-2.45",
       "sudo mv prometheus promtool /usr/local/bin",
-#     "sudo mv prometheus.yml /etc/prometheus/prometheus.yml",
-      "sudo chown prometheus:prometheus /etc/prometheus/prometheus.yml",
-      "sudo mv /home/ubuntu/prometheus.service /etc/systemd/system/",
+      "cd ~/pushgateway-1.6.0.linux-amd64",
+      "sudo mv pushgateway /usr/local/bin/",
+      "sudo chown -R prometheus:prometheus /usr/local/bin",
+      "sudo chown -R prometheus:prometheus /usr/local/bin/*",
+      "sudo mv /home/ubuntu/Prometheus_files/prometheus.service /etc/systemd/system/",
+      "sudo mv /home/ubuntu/Prometheus_files/alertmanager.service /etc/systemd/system/",
+      "sudo mv /home/ubuntu/Prometheus_files/pushgateway.service /etc/systemd/system/",
       "sudo systemctl daemon-reload",
       "sudo systemctl enable prometheus",
-      "sudo systemctl start prometheus"
+      "sudo systemctl start prometheus",
+      "sudo systemctl enable alertmanager",
+      "sudo systemctl start alertmanager",
+      "sudo systemctl enable pushgateway",
+      "sudo systemctl start pushgateway",
+      #"sudo systemctl enable grafana-server",
+      #"sudo systemctl start grafana-server",
+      "cd $HOME",
+      "sudo rm -rf prometheus-2.45.0-rc.1.linux-386.tar alertmanager-0.25.0.linux-amd64 alertmanager-0.25.0.linux-amd64.tar.gz prometheus-2.45.0-rc.1.linux-amd64.tar prometheus-2.45 prometheus-2.45.0-rc.1.linux-amd64.tar.gz pushgateway-1.6.0.linux-amd64.tar.gz pushgateway-1.6.0.linux-amd64 grafana-enterprise_10.0.2_amd64.deb",
+      #"sudo apt install apache2-utils -y"
     ]
   }
 }
@@ -272,13 +344,28 @@ resource "aws_instance" "red_hat_server" {
     private_key = tls_private_key.generated.private_key_pem
     host        = self.public_ip
   }
+  provisioner "file" {
+    source      = "Node"
+    destination = "/home/ec2-user/Node"
+  }
+  /*rovisioner "file" {
+    source = "Gitlab.cicd"
+    destination = "/home/ec2-user/Gitlab.cicd"
+  }
+  */
+  provisioner "file" {
+    source      = "pgsql"
+    destination = "/home/ec2-user/pgsql"
+  }
   provisioner "remote-exec" {
     inline = [
+      "sudo sed --in-place '/^root/a postgres        ALL=(ALL)       NOPASSWD:       ALL' /etc/sudoers",
       "sudo yum remove podman -y",
       "sudo yum install yum-utils -y",
       "sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo",
       "sudo yum install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y",
       "sudo usermod -G docker ec2-user",
+      "sudo systemctl enable docker",
       "sudo service docker start",
       "sudo chmod 777 /var/run/docker.sock",
       "sudo yum install zip -y",
@@ -304,25 +391,97 @@ resource "aws_instance" "red_hat_server" {
       "helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver",
       "helm repo update",
       "sudo yum install java-11-openjdk -y",
-      "echo 'export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-11.0.19.0.7-4.el9.x86_64' && echo 'export PATH=$PATH:$JAVA_HOME'",
+      "echo 'export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-11.0.20.0.8-3.el9.x86_64' >> ~/.bashrc && echo 'export PATH=$PATH:$JAVA_HOME' >> ~/.bashrc",
       "sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat/jenkins.repo",
       "sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io-2023.key",
       "sudo yum install jenkins -y",
       "sudo usermod -G docker jenkins",
       "sudo systemctl enable jenkins && sudo systemctl start jenkins",
-      "wget https://dlcdn.apache.org/maven/maven-3/3.9.1/binaries/apache-maven-3.9.1-bin.tar.gz",
-      "sudo tar -xvzf apache-maven-3.9.1-bin.tar.gz",
-      "rm apache-maven-3.9.1-bin.tar.gz",
+      "wget https://dlcdn.apache.org/maven/maven-3/3.9.4/binaries/apache-maven-3.9.4-bin.tar.gz",
+      "sudo tar -xvzf apache-maven-3.9.4-bin.tar.gz",
+      "rm apache-maven-3.9.4-bin.tar.gz",
+      "echo 'export M2_HOME=$HOME/apache-maven-3.9.4' >> ~/.bashrc && echo 'export M2=$M2_HOME/bin' >> ~/.bashrc && echo 'export PATH=$PATH:$M2' >> ~/.bashrc",
       "cd ~",
+      "sudo rm -rf apache-maven-3.9.4-bin.tar.gz",
       "mkdir chart && cd chart && mkdir chartsrepo",
       "helm create firstchart",
+      "sudo groupadd -r prometheus",
+      "sudo useradd -s /sbin/nologin -r -g prometheus prometheus",
+      "sudo mkdir -p /usr/local/bin/node/cert",
+      "sudo mv /home/ec2-user/Node/node_exporter /usr/local/bin/node",
+      "sudo mv /home/ec2-user/Node/node_web.yml /usr/local/bin/node",
+      "sudo mv /home/ec2-user/Node/push-to-gateway.py /usr/local/bin/node",
+      "sudo mv /home/ec2-user/Node/shoe-hub-data-gen.py /usr/local/bin/node",
+      "sudo mv /home/ec2-user/Node/node.service /etc/systemd/system",
+      "sudo chown -R prometheus:prometheus /usr/local/bin/node",
+      "sudo chown -R prometheus:prometheus /usr/local/bin/node/*",
+      "sudo chmod 755 /usr/local/bin/node/node_exporter",
+      "sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config",
+      "sudo systemctl daemon-reload",
+      "sudo systemctl enable node",
+      "sudo systemctl start node",
+      "sudo yum install pip -y",
+      "sudo pip install prometheus_client",
+      "export SSL_CERT_FILE=/usr/local/bin/node/cert/prom.crt",
+      "echo 'export SSL_CERT_FILE=/usr/local/bin/node/cert/prom.crt' >> ~/.bashrc",
+      "cd ~",
+      "mkdir gitlab && cd gitlab",
+      "git clone https://gitlab.com/StanislavGM/first-project.git",
+      "cd first-project",
+      "git branch dev1",
+      "git checkout dev1",
+      "mv /home/ec2-user/Gitlab.cicd/hello.py /home/ec2-user/gitlab/first-project",
+      "git restore hello.py",
+      "sudo curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.rpm.sh | sudo bash",
+      "sudo yum install gitlab-runner -y",
+      "sudo usermod -aG docker gitlab-runner",
+      "sudo rpm --import https://packages.gitlab.com/gitlab/gitlab-ce/gpgkey/gitlab-gitlab-ce-3D645A26AB9FBD22.pub.gpg",
+      "sudo gitlab-runner start",
+      "git config --global user.mail nvxfrost@gmail.com",
+      "git config --global user.name StanislavGM",
+      "cd $HOME/gitlab",
+      "git clone https://gitlab.com/StanislavGM/artifacts-demo.git",
+      "cd artifacts-demo",
+      "git checkout dev",
+      #      "mv /home/ec2-user/Gitlab.cicd/index.js /home/ec2-user/gitlab/artifacts-demo && mv /home/ec2-user/Gitlab.cicd/package.json /home/ec2-user/gitlab/artifacts-demo && mv /home/ec2-user/Gitlab.cicd/.gitlab-ci.yml /home/ec2-user/gitlab/artifacts-demo"
+      #      "sudo yum install nodejs -y",
+      #      "sudo yum install npm -y",
+      #      "sudo npm install",
+      #      "node index.js"
+      "sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm",
+      "sudo dnf -qy module disable postgresql",
+      "sudo dnf install -y postgresql16-server",
+      "sudo /usr/pgsql-16/bin/postgresql-16-setup initdb",
+      "sudo mv /home/ec2-user/pgsql/pg_hba.conf /var/lib/pgsql/16/data/",
+      "sudo chown -R root:root /var/lib/pgsql/16/data/pg_hba.conf",
+      "sudo mv /home/ec2-user/pgsql/postgresql.conf /var/lib/pgsql/16/data/",
+      "sudo chown -R root:root /var/lib/pgsql/16/data/postgresql.conf",
+      "sudo systemctl enable postgresql-16",
+      "sudo systemctl start postgresql-16",
     ]
+  }
+  tags = {  
+    Name = "West Server"
+  }
+}
+
+/*resource "aws_instance" "Win_Server_Os" {
+  ami                         = data.aws_ami.Win_Server_Os.id
+  instance_type               = "t2.small"
+  subnet_id                   = aws_subnet.public_subnets["public_subnet_1"].id
+  vpc_security_group_ids      = [data.aws_security_group.test.id, aws_security_group.ingress-ssh.id, aws_security_group.vpc-web.id]
+  associate_public_ip_address = true
+  key_name                    = aws_key_pair.generated.key_name
+  connection {
+    user        = "Administrator"
+    private_key = tls_private_key.generated.private_key_pem
+    host        = self.public_ip
   }
   tags = {
     Name = "West Server"
   }
 }
-
+*/
 # Create security group 443 from internet
 
 resource "aws_security_group" "my-new-security-group" {
@@ -413,6 +572,34 @@ resource "aws_security_group" "vpc-web" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
+    description = "Allow Port 389"
+    from_port   = 389
+    to_port     = 389
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "Allow Port 3389"
+    from_port   = 3389
+    to_port     = 3389
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "Allow Port 5001"
+    from_port   = 5001
+    to_port     = 5001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "Allow Port PostgreSQL"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
     description = "Allow Port 6443"
     from_port   = 6443
     to_port     = 6443
@@ -427,6 +614,20 @@ resource "aws_security_group" "vpc-web" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
+    description = "Allow Port 9093"
+    from_port   = 9093
+    to_port     = 9093
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "Allow Port 9091"
+    from_port   = 9091
+    to_port     = 9091
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
     description = "Allow Port 2379"
     from_port   = 2379
     to_port     = 2379
@@ -437,6 +638,13 @@ resource "aws_security_group" "vpc-web" {
     description = "Allow Port 2380"
     from_port   = 2380
     to_port     = 2380
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "Allow Port 3000"
+    from_port   = 3000
+    to_port     = 3000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -545,8 +753,7 @@ module "subnet_addrs" {
   indentity       = "Ubuntu"
 }
 */
-
-/* module "server_subnet_1" {
+/*module "server_subnet_1" {
   source          = "./modules/web-server"
   ami             = data.aws_ami.ubuntu_20_04.id
   subnet_id       = aws_subnet.public_subnets["public_subnet_1"].id
@@ -557,7 +764,6 @@ module "subnet_addrs" {
 
 }
 */
-/*
 module "autoscaling" {
   source = "github.com/terraform-aws-modules/terraform-aws-autoscaling"
   #Autoscaling group
@@ -576,15 +782,14 @@ module "autoscaling" {
     Name = "Web EC2 Server 2"
   }
 }
-/*
-/*
+
 module "key-pair" {
   source  = "mitchellh/dynamic-keys/aws"
   version = "2.0.0"
   path    = "${path.root}/keys"
   name    = "MyAWSKey_2"
 }
-*/
+
 resource "random_pet" "server" {
   length = 2
 }
@@ -616,7 +821,7 @@ resource "aws_security_group" "main" {
 resource "aws_ecr_repository" "ecr_for_images" {
   name                 = "ecr_for_images"
   image_tag_mutability = "MUTABLE"
-
+  force_delete         = true
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -625,6 +830,28 @@ resource "aws_ecr_repository" "ecr_for_images" {
   }
 }
 
+resource "aws_sns_topic" "sns2kafka" {
+  name = "sns2kafka-topic"
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_alarm" {
+  alarm_name                = "terraform-cpu-alarm"
+  comparison_operator       = "GreaterThanThreshold"
+  evaluation_periods        = 1
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = 60
+  statistic                 = "Average"
+  threshold                 = 30
+  alarm_description         = "This metric monitors ec2 cpu utilization"
+  insufficient_data_actions = [aws_sns_topic.sns2kafka.arn]
+  alarm_actions             = [aws_sns_topic.sns2kafka.arn]
+  dimensions = {
+    InstanceId = aws_instance.ubuntu_server.id
+  }
+}
+
+/*
 resource "aws_eks_cluster" "first_cluster" {
   name     = var.eks_cluster
   role_arn = aws_iam_role.eks_first_cluster.arn
@@ -768,6 +995,7 @@ resource "aws_eks_node_group" "aws_eks_node_group" {
     aws_iam_role_policy_attachment.node_group_role-AmazonEC2ContainerRegistryReadOnly,
   ]
 }
+*/
 /*
 /*resource "aws_instance" "kube-master" {
   ami                         = data.aws_ami.red_hat.id
